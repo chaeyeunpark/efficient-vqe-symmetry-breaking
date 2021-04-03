@@ -1,3 +1,4 @@
 release*
 debug*
 lib
+.ycm_extra_conf.py
