@@ -152,15 +152,23 @@ int main(int argc, char *argv[])
 
 		std::ifstream init_fin(ini_path);
 		double v;
-		for(uint32_t idx = 0; idx < parameters.size()/2; ++idx)
+		for(uint32_t idx = 0; idx < depth/2; ++idx)
 		{
 			init_fin >> v;
-			parameters[idx] += v;
+			parameters[3*idx] += v;
+			init_fin >> v;
+			parameters[3*idx+1] += v;
+			init_fin >> v;
+			parameters[3*idx+2] += v;
 		}
-		for(uint32_t idx = parameters.size()/2+1; idx < parameters.size(); ++idx)
+		for(uint32_t idx = depth/2 + 1; idx < depth; ++idx)
 		{
 			init_fin >> v;
-			parameters[idx] += v;
+			parameters[3*idx] += v;
+			init_fin >> v;
+			parameters[3*idx+1] += v;
+			init_fin >> v;
+			parameters[3*idx+2] += v;
 		}
 	}
 
