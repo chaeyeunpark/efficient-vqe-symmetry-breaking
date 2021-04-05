@@ -14,15 +14,49 @@
 
 #include <tbb/tbb.h>
 
-Eigen::SparseMatrix<double> tfi_ham(const uint32_t N, double h)
+Eigen::SparseMatrix<qunn::cx_double> single_pauli(const uint32_t N, const uint32_t idx, 
+		const Eigen::SparseMatrix<qunn::cx_double>& m)
 {
-    edp::LocalHamiltonian<double> ham_ct(N, 2);
-    for(uint32_t k = 0; k < N; ++k)
-    {
-        ham_ct.addTwoSiteTerm(std::make_pair(k, (k+1) % N), qunn::pauli_zz());
-        ham_ct.addOneSiteTerm(k, h*qunn::pauli_x());
-    }
-    return -edp::constructSparseMat<double>(1 << N, ham_ct);
+	edp::LocalHamiltonian<qunn::cx_double> lh(N, 2);
+	lh.addOneSiteTerm(idx, m);
+	return edp::constructSparseMat<qunn::cx_double>(1<<N, lh);
+}
+
+Eigen::SparseMatrix<qunn::cx_double> identity(const uint32_t N)
+{
+	std::vector<Eigen::Triplet<qunn::cx_double>> triplets;
+	for(uint32_t n = 0; n < (1u<<N); ++n)
+	{
+		triplets.emplace_back(n, n, 1.0);
+	}
+	Eigen::SparseMatrix<qunn::cx_double> m(1<<N,1<<N);
+	m.setFromTriplets(triplets.begin(), triplets.end());
+	return m;
+}
+
+
+Eigen::SparseMatrix<qunn::cx_double> cluster_ham(uint32_t N, double h)
+{
+	using namespace qunn;
+	Eigen::SparseMatrix<cx_double> ham(1<<N, 1<<N);
+	for(uint32_t k = 0; k < N; k++)
+	{
+		Eigen::SparseMatrix<cx_double> term = identity(N);
+		term = term*single_pauli(N, k, pauli_z().cast<cx_double>());
+		term = term*single_pauli(N, (k+1)%N, pauli_x().cast<cx_double>());
+		term = term*single_pauli(N, (k+2)%N, pauli_z().cast<cx_double>());
+
+		ham += -term;
+	}
+
+	edp::LocalHamiltonian<double> lh(N, 2);
+	for(uint32_t k = 0; k < N; k++)
+	{
+		lh.addOneSiteTerm(k, pauli_x());
+	}
+	ham -= h*edp::constructSparseMat<cx_double>(1<<N, lh);
+
+	return ham;
 }
 
 int get_num_threads()
@@ -38,6 +72,7 @@ int main(int argc, char *argv[])
     using namespace qunn;
     using std::sqrt;
 	const uint32_t total_epochs = 2000;
+	const double h = 0.5;
 
 	nlohmann::json param_in;
 	nlohmann::json param_out;
@@ -59,7 +94,8 @@ int main(int argc, char *argv[])
 		{"N", N},
 		{"depth", depth},
 		{"sigma", sigma},
-		{"learning_rate", learning_rate}
+		{"learning_rate", learning_rate},
+		{"h", h}
 	});
 
 
@@ -74,26 +110,24 @@ int main(int argc, char *argv[])
 
     Circuit circ(1 << N);
 
-	Eigen::VectorXd zz_all(1<<N);
-	
-	for(uint32_t n = 0; n < (1u<<N); ++n)
+	std::vector<std::map<uint32_t, Pauli>> ti_zxz;
+
+	for(uint32_t k = 0; k < N; ++k)
 	{
-		int elt = 0;
-		for(uint32_t k = 0; k < N; ++k)
-		{
-			int z0 = 1-2*((n >> k) & 1);
-			int z1 = 1-2*((n >> ((k+1)%N)) & 1);
-			elt += z0*z1;
-		}
-		zz_all(n) = elt;
+		std::map<uint32_t, Pauli> term;
+		term[k] = Pauli('Z');
+		term[(k+1)%N] = Pauli('X');
+		term[(k+2)%N] = Pauli('Z');
+
+		ti_zxz.emplace_back(std::move(term));
 	}
-	
-	auto zz_all_ham = qunn::DiagonalOperator(zz_all, "zz all");
-	auto x_all_ham = qunn::SumLocalHam(N, qunn::pauli_x().cast<cx_double>(), "x all");
+
+	auto zxz_ham = qunn::SumPauliString(N, ti_zxz);
+	auto x_all_ham = qunn::SumLocalHam(N, qunn::pauli_x().cast<cx_double>());
 
 	for(uint32_t p = 0; p < depth; ++p)
 	{
-		circ.add_op_right(std::make_unique<qunn::DiagonalHamEvol>(zz_all_ham));
+		circ.add_op_right(std::make_unique<qunn::SumPauliStringHamEvol>(zxz_ham));
 		circ.add_op_right(std::make_unique<qunn::ProductHamEvol>(x_all_ham));
 	}
 
@@ -113,7 +147,7 @@ int main(int argc, char *argv[])
 
     Eigen::VectorXcd ini = Eigen::VectorXcd::Ones(1 << N);
     ini /= sqrt(1 << N);
-    const auto ham = tfi_ham(N, 0.5);
+    const auto ham = cluster_ham(N, h);
 
 	std::cout.precision(10);
 

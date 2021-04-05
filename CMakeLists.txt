@@ -44,3 +44,6 @@ target_link_libraries(ti_tfi_brksym qunn)
 
 add_executable(ti_tfi_brksym_incdepth "src/ti_tfi_brksym_incdepth.cpp")
 target_link_libraries(ti_tfi_brksym_incdepth qunn)
+
+add_executable(ti_cluster "src/ti_cluster.cpp")
+target_link_libraries(ti_cluster qunn)

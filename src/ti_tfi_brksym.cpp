@@ -9,7 +9,7 @@
 
 #include "Circuit.hpp"
 
-#include "Operators/operators.hpp"
+#include "operators.hpp"
 #include "Optimizers/OptimizerFactory.hpp"
 
 #include <tbb/tbb.h>
