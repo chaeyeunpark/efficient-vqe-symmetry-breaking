@@ -269,5 +269,13 @@ int main(int argc, char *argv[])
         }
     }
 
+	{
+		std::ofstream param_out("final_param.dat");
+		for(auto& p: parameters)
+		{
+			param_out << p.value() << "\t";
+		}
+	}
+
     return 0;
 }
