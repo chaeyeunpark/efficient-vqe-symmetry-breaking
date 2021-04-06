@@ -253,7 +253,8 @@ int main(int argc, char *argv[])
         }
 
 		Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
-		double lambda = std::max(100.0*std::pow(0.9, epoch), 1e-3);
+		//double lambda = std::max(100.0*std::pow(0.9, epoch), 1e-3);
+		double lambda = 1e-3;
 		fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
 
         Eigen::VectorXd egrad = (output.transpose()*ham*grads).real();
