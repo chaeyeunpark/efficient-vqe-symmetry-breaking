@@ -50,3 +50,6 @@ target_link_libraries(ti_cluster qunn)
 
 add_executable(ti_cluster_brksym "src/ti_cluster_brksym.cpp")
 target_link_libraries(ti_cluster_brksym qunn)
+
+add_executable(ti_cluster_stab "src/ti_cluster_stab.cpp")
+target_link_libraries(ti_cluster_stab qunn)
