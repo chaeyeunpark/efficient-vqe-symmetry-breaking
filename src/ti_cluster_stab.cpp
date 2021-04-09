@@ -98,11 +98,9 @@ int main(int argc, char *argv[])
 {
     using namespace qunn;
     using std::sqrt;
-	const uint32_t total_epochs = 2000;
+	const uint32_t total_epochs = 3000;
 	const double h = 0.0;
-	const double alpha_1 = 0.8;
-	const double alpha_2 = 0.8;
-	const double clipping = 20.0;
+	const bool use_ngd = true;
 
 	nlohmann::json param_in;
 	nlohmann::json param_out;
@@ -119,12 +117,15 @@ int main(int argc, char *argv[])
     const uint32_t depth = param_in.at("depth").get<uint32_t>();
 	const double sigma = param_in.at("sigma").get<double>();
 	const double learning_rate = param_in.value("learning_rate", 1.0e-2);
+	const double grad_clip = param_in.value("grad_clip", 1e+8);
+	const double alpha = param_in.value("alpha", 0.8);
 
 	param_out["parameters"] = nlohmann::json({
 		{"N", N},
 		{"depth", depth},
 		{"sigma", sigma},
 		{"learning_rate", learning_rate},
+		{"use_ngd", use_ngd},
 		{"h", h}
 	});
 
@@ -211,7 +212,6 @@ int main(int argc, char *argv[])
 
     Eigen::VectorXcd ini = Eigen::VectorXcd::Ones(1 << N);
     ini /= sqrt(1 << N);
-	//ini = z_even_op(N)*ini;
 
     const auto ham = cluster_ham(N, h);
 	const auto x_even = x_even_op(N);
@@ -221,11 +221,8 @@ int main(int argc, char *argv[])
 
     circ.set_input(ini);
 
-	auto optimizer = OptimizerFactory::getInstance().createOptimizer({
-		{"name", "SGDMomentum"},
-		{"alpha", learning_rate},
-		{"gamma", 0.9}
-	});
+	auto optimizer = OptimizerFactory::getInstance().createOptimizer(
+			param_in["optimizer"]);
 
     for(uint32_t epoch = 0; epoch < total_epochs; ++epoch)
     {
@@ -240,8 +237,8 @@ int main(int argc, char *argv[])
 		}
 		*/
 
-		double alpha_1_t = alpha_1;
-		double alpha_2_t = alpha_2;
+		double alpha_1_t = alpha;
+		double alpha_2_t = alpha;
 
 
         circ.clear_evaluated();
@@ -260,10 +257,6 @@ int main(int argc, char *argv[])
             grads.col(k) = *parameters[k].grad();
         }
 
-		Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
-		//double lambda = std::max(100.0*std::pow(0.9, epoch), 1e-3);
-		double lambda = 1e-3;
-		fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
 
         Eigen::VectorXd egrad = (output.transpose()*ham*grads).real();
         Eigen::VectorXd x_even_grad = (output.transpose()*x_even*grads).real();
@@ -278,12 +271,22 @@ int main(int argc, char *argv[])
 		Eigen::VectorXd total_grad = (egrad + alpha_1_t*x_even_grad + alpha_2_t*x_odd_grad);
 		
 		double grad_norm = total_grad.norm();
-		if(grad_norm > clipping)
+		if(grad_norm > grad_clip)
 		{
-			total_grad *= (clipping/grad_norm);
+			total_grad *= (grad_clip/grad_norm);
 		}
+		Eigen::VectorXd v;
 
-		Eigen::VectorXd v = fisher.inverse()*total_grad;
+		if(use_ngd)
+		{
+			Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
+			double lambda = 1e-3;
+			fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
+			v = fisher.inverse()*total_grad;
+		}
+		else{
+			v = total_grad;
+		}
 		Eigen::VectorXd opt = optimizer->getUpdate(v);
 
         for(uint32_t k = 0; k < parameters.size(); ++k)
@@ -291,6 +294,13 @@ int main(int argc, char *argv[])
             parameters[k] += opt(k);
         }
     }
+	{
+		std::ofstream weight_out("final_weight.dat");
+		for(auto& p: parameters)
+		{
+			weight_out << p.value() << "\t";
+		}
+	}
 
     return 0;
 }
