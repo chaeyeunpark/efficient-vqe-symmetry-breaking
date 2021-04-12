@@ -56,3 +56,6 @@ target_link_libraries(ti_cluster_stab qunn)
 
 add_executable(ti_j1j2 "src/ti_j1j2.cpp")
 target_link_libraries(ti_j1j2 qunn)
+
+add_executable(ti_txyz "src/ti_txyz.cpp")
+target_link_libraries(ti_txyz qunn)
