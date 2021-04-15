@@ -258,12 +258,12 @@ int main(int argc, char *argv[])
         }
 
 
-        Eigen::VectorXd egrad = (output.transpose()*ham*grads).real();
-        Eigen::VectorXd x_even_grad = (output.transpose()*x_even*grads).real();
-        Eigen::VectorXd x_odd_grad = (output.transpose()*x_odd*grads).real();
-        double energy = real(cx_double(output.transpose()*ham*output));
-		double x_even_expectation = real(cx_double(output.transpose()*x_even*output));
-		double x_odd_expectation = real(cx_double(output.transpose()*x_even*output));
+        Eigen::VectorXd egrad = (output.adjoint()*ham*grads).real();
+        Eigen::VectorXd x_even_grad = (output.adjoint()*x_even*grads).real();
+        Eigen::VectorXd x_odd_grad = (output.adjoint()*x_odd*grads).real();
+        double energy = real(cx_double(output.adjoint()*ham*output));
+		double x_even_expectation = real(cx_double(output.adjoint()*x_even*output));
+		double x_odd_expectation = real(cx_double(output.adjoint()*x_even*output));
 
         std::cout << epoch << "\t" << energy << "\t" << x_even_expectation <<
 			"\t" << x_odd_expectation << "\t" << egrad.norm() << "\t" << output.norm() << std::endl;

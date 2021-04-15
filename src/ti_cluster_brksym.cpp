@@ -257,8 +257,8 @@ int main(int argc, char *argv[])
 		double lambda = 1e-3;
 		fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
 
-        Eigen::VectorXd egrad = (output.transpose()*ham*grads).real();
-        double energy = real(cx_double(output.transpose()*ham*output));
+        Eigen::VectorXd egrad = (output.adjoint()*ham*grads).real();
+        double energy = real(cx_double(output.adjoint()*ham*output));
 
         std::cout << energy << "\t" << egrad.norm() << "\t" << output.norm() << std::endl;
 

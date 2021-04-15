@@ -214,16 +214,20 @@ int main(int argc, char *argv[])
             grads.col(k) = *parameters[k].grad();
         }
 
-		Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
-		double lambda = std::max(100.0*std::pow(0.9, epoch), 1e-3);
-		fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
-
-        Eigen::VectorXd egrad = (output.transpose()*ham*grads).real();
-        double energy = real(cx_double(output.transpose()*ham*output));
+        Eigen::VectorXd egrad = (output.adjoint()*ham*grads).real();
+        double energy = real(cx_double(output.adjoint()*ham*output));
+		
+		Eigen::VectorXd opt;
+		{
+			Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
+			double lambda = std::max(100.0*std::pow(0.9, epoch), 1e-3);
+			fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
+			Eigen::LLT<Eigen::MatrixXd> llt_fisher(fisher);
+			opt = -learning_rate*llt_fisher.solve(egrad);
+		}
 
         std::cout << energy << "\t" << egrad.norm() << "\t" << output.norm() << std::endl;
 
-		Eigen::VectorXd opt = -learning_rate*fisher.inverse()*egrad;
 
         for(uint32_t k = 0; k < parameters.size(); ++k)
         {

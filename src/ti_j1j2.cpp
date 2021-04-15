@@ -30,7 +30,7 @@ Eigen::SparseMatrix<double> get_SS()
 	return m;
 }
 
-Eigen::SparseMatrix<qunn::cx_double> j1j2_ham(uint32_t N)
+Eigen::SparseMatrix<qunn::cx_double> j1j2_ham(uint32_t N, double j2)
 {
 	using namespace qunn;
 
@@ -42,7 +42,7 @@ Eigen::SparseMatrix<qunn::cx_double> j1j2_ham(uint32_t N)
 	}
 	for(uint32_t n = 0; n < N; ++n)
 	{
-		lh.addTwoSiteTerm(std::make_pair(n, (n+2)%N), 0.5*get_SS());
+		lh.addTwoSiteTerm(std::make_pair(n, (n+2)%N), j2*get_SS());
 	}
 
 	return edp::constructSparseMat<cx_double>(1<<N, lh);
@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
     using namespace qunn;
     using std::sqrt;
 	const uint32_t total_epochs = 2000;
-	const double h = 0.0;
+	const double j2 = 0.0;
 
 	nlohmann::json param_in;
 	nlohmann::json param_out;
@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
 		{"depth", depth},
 		{"sigma", sigma},
 		{"learning_rate", learning_rate},
-		{"h", h}
+		{"j2", j2}
 	});
 
 
@@ -221,7 +221,7 @@ int main(int argc, char *argv[])
 
     Eigen::VectorXcd ini = Eigen::VectorXcd::Ones(1 << N);
     ini /= sqrt(1 << N);
-    const auto ham = j1j2_ham(N);
+    const auto ham = j1j2_ham(N, j2);
 
 	std::cout.precision(10);
 
@@ -249,8 +249,8 @@ int main(int argc, char *argv[])
 		double lambda = std::max(100.0*std::pow(0.9, epoch), 1e-3);
 		fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
 
-        Eigen::VectorXd egrad = (output.transpose()*ham*grads).real();
-        double energy = real(cx_double(output.transpose()*ham*output));
+        Eigen::VectorXd egrad = (output.adjoint()*ham*grads).real();
+        double energy = real(cx_double(output.adjoint()*ham*output));
 
         std::cout << energy << "\t" << egrad.norm() << "\t" << output.norm() << std::endl;
 

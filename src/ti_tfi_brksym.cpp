@@ -54,7 +54,6 @@ int main(int argc, char *argv[])
     const uint32_t depth = param_in.at("depth").get<uint32_t>();
 	const double sigma = param_in.at("sigma").get<double>();
 	const double learning_rate = param_in.value("learning_rate", 1.0e-2);
-	const bool centering = param_in.value("centering", false);
 	const std::string ini_path = param_in.value("ini_path", "");
 
 	param_out["parameters"] = nlohmann::json({
@@ -62,7 +61,7 @@ int main(int argc, char *argv[])
 		{"depth", depth},
 		{"sigma", sigma},
 		{"learning_rate", learning_rate},
-		{"centering", centering}
+		{"ini_path", ini_path}
 	});
 
 
@@ -131,7 +130,10 @@ int main(int argc, char *argv[])
 		for(uint32_t idx = 0; idx < parameters.size(); ++idx)
 		{
 			if (idx % 3 == 2)
+			{
 				parameters[idx] = 2*M_PI/depth + ndist(re);
+				//parameters[idx] = ndist(re);
+			}
 			else
 				parameters[idx] = ndist(re);
 		}
@@ -165,8 +167,6 @@ int main(int argc, char *argv[])
 
     circ.set_input(ini);
 
-	double dropout_prob = 0.5;
-
     for(uint32_t epoch = 0; epoch < total_epochs; ++epoch)
     {
         circ.clear_evaluated();
@@ -186,23 +186,15 @@ int main(int argc, char *argv[])
         }
 
 		Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
-
-		if (centering)
-		{
-			Eigen::RowVectorXcd m = output.adjoint()*grads;
-			fisher -= (m.adjoint()*m).real();
-		}
-		
-
 		double lambda = std::max(100.0*std::pow(0.9, epoch), 1e-3);
 		fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
 
-        Eigen::VectorXd egrad = (output.transpose()*ham*grads).real();
-        double energy = real(cx_double(output.transpose()*ham*output));
+        Eigen::VectorXd egrad = (output.adjoint()*ham*grads).real();
+        double energy = real(cx_double(output.adjoint()*ham*output));
 
-        std::cout << energy << "\t" << egrad.norm() << "\t" << output.norm() << std::endl;
+        std::cout << epoch << "\t" << energy << "\t" << 
+			egrad.norm() << "\t" << output.norm() << std::endl;
 
-		//Eigen::VectorXd opt = optimizer->getUpdate(egrad);
 		Eigen::VectorXd opt = -learning_rate*fisher.inverse()*egrad;
 
         for(uint32_t k = 0; k < parameters.size(); ++k)
