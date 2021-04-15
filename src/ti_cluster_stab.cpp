@@ -100,7 +100,6 @@ int main(int argc, char *argv[])
     using std::sqrt;
 	const uint32_t total_epochs = 3000;
 	const double h = 0.0;
-	const bool use_ngd = true;
 
 	nlohmann::json param_in;
 	nlohmann::json param_out;
@@ -116,15 +115,16 @@ int main(int argc, char *argv[])
     const uint32_t N = param_in.at("N").get<uint32_t>();
     const uint32_t depth = param_in.at("depth").get<uint32_t>();
 	const double sigma = param_in.at("sigma").get<double>();
-	const double learning_rate = param_in.value("learning_rate", 1.0e-2);
 	const double grad_clip = param_in.value("grad_clip", 1e+8);
 	const double alpha = param_in.value("alpha", 0.8);
+	const bool use_ngd = param_in.value("use_ngd", true);
 
 	param_out["parameters"] = nlohmann::json({
 		{"N", N},
 		{"depth", depth},
 		{"sigma", sigma},
-		{"learning_rate", learning_rate},
+		{"grad_clip", grad_clip},
+		{"alpha", alpha},
 		{"use_ngd", use_ngd},
 		{"h", h}
 	});
@@ -282,7 +282,9 @@ int main(int argc, char *argv[])
 			Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
 			double lambda = 1e-3;
 			fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
-			v = fisher.inverse()*total_grad;
+
+			Eigen::LLT<Eigen::MatrixXd> llt_fisher(fisher);
+			v = llt_fisher.solve(total_grad);
 		}
 		else{
 			v = total_grad;
