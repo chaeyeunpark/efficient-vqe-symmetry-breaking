@@ -38,6 +38,7 @@ int main(int argc, char *argv[])
     using namespace qunn;
     using std::sqrt;
 	const uint32_t total_epochs = 2000;
+	const double h = 0.5;
 
 	nlohmann::json param_in;
 	nlohmann::json param_out;
@@ -152,20 +153,20 @@ int main(int argc, char *argv[])
 	}
 
 	{
-		std::ofstream param_out("initial_param.dat");
+		std::ofstream param_out("initial_weight.dat");
 		for(auto& p: parameters)
 		{
 			param_out << p.value() << "\t";
 		}
 	}
 
+    const auto ham = tfi_ham(N, h);
+
     Eigen::VectorXcd ini = Eigen::VectorXcd::Ones(1 << N);
     ini /= sqrt(1 << N);
-    const auto ham = tfi_ham(N, 0.5);
+    circ.set_input(ini);
 
 	std::cout.precision(10);
-
-    circ.set_input(ini);
 
     for(uint32_t epoch = 0; epoch < total_epochs; ++epoch)
     {
@@ -185,21 +186,22 @@ int main(int argc, char *argv[])
             grads.col(k) = *parameters[k].grad();
         }
 
-		Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
-		double lambda = std::max(100.0*std::pow(0.9, epoch), 1e-3);
-		fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
-
         Eigen::VectorXd egrad = (output.adjoint()*ham*grads).real();
         double energy = real(cx_double(output.adjoint()*ham*output));
 
         std::cout << epoch << "\t" << energy << "\t" << 
 			egrad.norm() << "\t" << output.norm() << std::endl;
 
-		Eigen::VectorXd opt = -learning_rate*fisher.inverse()*egrad;
+		Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
+		double lambda = std::max(100.0*std::pow(0.9, epoch), 1e-3);
+		fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
+
+		Eigen::LLT<Eigen::MatrixXd> llt_fisher(fisher);
+		Eigen::VectorXd opt_v = -learning_rate*llt_fisher.solve(egrad);
 
         for(uint32_t k = 0; k < parameters.size(); ++k)
         {
-            parameters[k] += opt(k);
+            parameters[k] += opt_v(k);
         }
     }
 

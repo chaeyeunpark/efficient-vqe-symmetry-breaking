@@ -125,11 +125,9 @@ int main(int argc, char *argv[])
 
 	auto ham = tfi_ham(N, h);
 
-
     Eigen::VectorXcd ini = Eigen::VectorXcd::Ones(1 << N);
     ini /= sqrt(1 << N);
     circ.set_input(ini);
-
 
 	std::cout.precision(10);
     for(uint32_t epoch = 0; epoch < total_epochs; ++epoch)

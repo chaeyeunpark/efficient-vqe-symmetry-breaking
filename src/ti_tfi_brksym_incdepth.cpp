@@ -11,7 +11,7 @@
 
 #include "Circuit.hpp"
 
-#include "Operators/operators.hpp"
+#include "operators.hpp"
 #include "Optimizers/OptimizerFactory.hpp"
 
 Eigen::SparseMatrix<double> tfi_ham(const uint32_t N, double h)
@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 
 	{
 		std::smatch depth_match;
-		std::regex depth_search("D(\\d+)");
+		std::regex depth_search("d(\\d+)");
 		std::regex_search(ini_path, depth_match, depth_search);
 		int depth_ini_path = std::stoi(depth_match[1]);
 
@@ -221,7 +221,7 @@ int main(int argc, char *argv[])
         Eigen::VectorXd egrad = (output.adjoint()*ham*grads).real();
         double energy = real(cx_double(output.adjoint()*ham*output));
 
-        std::cout << energy << "\t" << egrad.norm() << "\t" << output.norm() << std::endl;
+        std::cout << epoch << "\t" << energy << "\t" << egrad.norm() << "\t" << output.norm() << std::endl;
 
 		//Eigen::VectorXd opt = optimizer->getUpdate(egrad);
 		Eigen::VectorXd opt = -learning_rate*fisher.inverse()*egrad;
