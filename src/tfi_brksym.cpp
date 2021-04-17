@@ -16,13 +16,13 @@
 
 Eigen::SparseMatrix<double> tfi_ham(const uint32_t N, double h)
 {
-    edp::LocalHamiltonian<double> ham_ct(N, 2);
-    for(uint32_t k = 0; k < N; ++k)
-    {
-        ham_ct.addTwoSiteTerm(std::make_pair(k, (k+1) % N), qunn::pauli_zz());
-        ham_ct.addOneSiteTerm(k, h*qunn::pauli_x());
-    }
-    return -edp::constructSparseMat<double>(1 << N, ham_ct);
+	edp::LocalHamiltonian<double> ham_ct(N, 2);
+	for(uint32_t k = 0; k < N; ++k)
+	{
+		ham_ct.addTwoSiteTerm(std::make_pair(k, (k+1) % N), qunn::pauli_zz());
+		ham_ct.addOneSiteTerm(k, h*qunn::pauli_x());
+	}
+	return -edp::constructSparseMat<double>(1 << N, ham_ct);
 }
 
 int get_num_threads()
@@ -35,8 +35,8 @@ int get_num_threads()
 
 int main(int argc, char *argv[])
 {
-    using namespace qunn;
-    using std::sqrt;
+	using namespace qunn;
+	using std::sqrt;
 	const uint32_t total_epochs = 2000;
 	const double h = 0.5;
 
@@ -51,11 +51,11 @@ int main(int argc, char *argv[])
 		std::ifstream fin(argv[1]);
 		fin >> param_in;
 	}
-    const uint32_t N = param_in.at("N").get<uint32_t>();
-    const uint32_t depth = param_in.at("depth").get<uint32_t>();
+	const uint32_t N = param_in.at("N").get<uint32_t>();
+	const uint32_t depth = param_in.at("depth").get<uint32_t>();
 	const double sigma = param_in.at("sigma").get<double>();
 	const bool centering = param_in.value("centering", true);
-	const double learning_rate = param_in.value("learning_rate", 1.0e-2);
+	const double learning_rate = param_in.value("learning_rate", 2.0e-2);
 	const std::string ini_path = param_in.value("ini_path", "");
 
 	param_out["parameters"] = nlohmann::json({
@@ -74,14 +74,14 @@ int main(int argc, char *argv[])
 			num_threads);
 
 
-    std::random_device rd;
-    std::default_random_engine re{rd()};
+	std::random_device rd;
+	std::default_random_engine re{rd()};
 
-    Circuit circ(1 << N);
+	Circuit circ(1 << N);
 
 	Eigen::VectorXd zz_all(1<<N);
 	Eigen::VectorXd z_all(1<<N);
-	
+
 	for(uint32_t n = 0; n < (1u<<N); ++n)
 	{
 		int elt = 0;
@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
 		zz_all(n) = elt;
 	}
 
-	
+
 	for(uint32_t n = 0; n < (1u<<N); ++n)
 	{
 		int elt = 0;
@@ -124,8 +124,8 @@ int main(int argc, char *argv[])
 		fout << param_out << std::endl;
 	}
 
-    auto parameters = circ.parameters();
-	
+	auto parameters = circ.parameters();
+
 	if(ini_path.empty())
 	{
 		std::cerr << "initialization from the normal distribution sigma=" << sigma << std::endl;
@@ -134,8 +134,8 @@ int main(int argc, char *argv[])
 		{
 			if (idx % 3 == 2)
 			{
-				//parameters[idx] = 2*M_PI/depth + ndist(re);
-				parameters[idx] = ndist(re);
+				parameters[idx] = 2*M_PI/depth + ndist(re);
+				//parameters[idx] = ndist(re);
 			}
 			else
 				parameters[idx] = ndist(re);
@@ -155,43 +155,44 @@ int main(int argc, char *argv[])
 	}
 
 	{
-		std::ofstream param_out("initial_weight.dat");
+		std::ofstream initial_weight("initial_weight.dat");
 		for(auto& p: parameters)
 		{
-			param_out << p.value() << "\t";
+			initial_weight << p.value() << "\t";
 		}
+		initial_weight.close();
 	}
 
-    const auto ham = tfi_ham(N, h);
+	const auto ham = tfi_ham(N, h);
 
-    Eigen::VectorXcd ini = Eigen::VectorXcd::Ones(1 << N);
-    ini /= sqrt(1 << N);
-    circ.set_input(ini);
+	Eigen::VectorXcd ini = Eigen::VectorXcd::Ones(1 << N);
+	ini /= sqrt(1 << N);
+	circ.set_input(ini);
 
 	std::cout.precision(10);
 
-    for(uint32_t epoch = 0; epoch < total_epochs; ++epoch)
-    {
-        circ.clear_evaluated();
-        Eigen::VectorXcd output = *circ.output();
-    	for(auto& p: parameters)
+	for(uint32_t epoch = 0; epoch < total_epochs; ++epoch)
+	{
+		circ.clear_evaluated();
+		Eigen::VectorXcd output = *circ.output();
+		for(auto& p: parameters)
 		{
 			p.zero_grad();
 		}
 
-        circ.derivs();
+		circ.derivs();
 
-        Eigen::MatrixXcd grads(1 << N, parameters.size());
+		Eigen::MatrixXcd grads(1 << N, parameters.size());
 
-        for(uint32_t k = 0; k < parameters.size(); ++k)
-        {
-            grads.col(k) = *parameters[k].grad();
-        }
+		for(uint32_t k = 0; k < parameters.size(); ++k)
+		{
+			grads.col(k) = *parameters[k].grad();
+		}
 
-        Eigen::VectorXd egrad = (output.adjoint()*ham*grads).real();
-        double energy = real(cx_double(output.adjoint()*ham*output));
+		Eigen::VectorXd egrad = (output.adjoint()*ham*grads).real();
+		double energy = real(cx_double(output.adjoint()*ham*output));
 
-        std::cout << epoch << "\t" << energy << "\t" << 
+		std::cout << epoch << "\t" << energy << "\t" << 
 			egrad.norm() << "\t" << output.norm() << std::endl;
 
 		Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
@@ -206,19 +207,20 @@ int main(int argc, char *argv[])
 		Eigen::LLT<Eigen::MatrixXd> llt_fisher(fisher);
 		Eigen::VectorXd opt_v = -learning_rate*llt_fisher.solve(egrad);
 
-        for(uint32_t k = 0; k < parameters.size(); ++k)
-        {
-            parameters[k] += opt_v(k);
-        }
-    }
-
-	{
-		std::ofstream param_out("final_param.dat");
-		for(auto& p: parameters)
+		for(uint32_t k = 0; k < parameters.size(); ++k)
 		{
-			param_out << p.value() << "\t";
+			parameters[k] += opt_v(k);
 		}
 	}
 
-    return 0;
+	{
+		std::ofstream final_weight("final_weight.dat");
+		for(const auto& p: parameters)
+		{
+			final_weight << p.value() << "\t";
+		}
+		final_weight.close();
+	}
+
+	return 0;
 }

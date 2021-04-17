@@ -36,11 +36,11 @@ endif()
 
 link_directories(${CMAKE_SOURCE_DIR}/lib)
 
-add_executable(ti_tfi "src/ti_tfi.cpp")
-target_link_libraries(ti_tfi qunn)
+add_executable(tfi "src/tfi.cpp")
+target_link_libraries(tfi qunn)
 
-add_executable(ti_tfi_brksym "src/ti_tfi_brksym.cpp")
-target_link_libraries(ti_tfi_brksym qunn)
+add_executable(tfi_brksym "src/tfi_brksym.cpp")
+target_link_libraries(tfi_brksym qunn)
 
 add_executable(ti_tfi_brksym_incdepth "src/ti_tfi_brksym_incdepth.cpp")
 target_link_libraries(ti_tfi_brksym_incdepth qunn)
