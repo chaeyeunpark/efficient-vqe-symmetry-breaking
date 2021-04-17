@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
     const uint32_t N = param_in.at("N").get<uint32_t>();
     const uint32_t depth = param_in.at("depth").get<uint32_t>();
 	const double sigma = param_in.at("sigma").get<double>();
-	const bool centering = param_in.at("centering").get<bool>();
+	const bool centering = param_in.value("centering", true);
 	const double learning_rate = param_in.value("learning_rate", 1.0e-2);
 	const std::string ini_path = param_in.value("ini_path", "");
 
@@ -134,8 +134,8 @@ int main(int argc, char *argv[])
 		{
 			if (idx % 3 == 2)
 			{
-				parameters[idx] = 2*M_PI/depth + ndist(re);
-				//parameters[idx] = ndist(re);
+				//parameters[idx] = 2*M_PI/depth + ndist(re);
+				parameters[idx] = ndist(re);
 			}
 			else
 				parameters[idx] = ndist(re);
@@ -195,8 +195,11 @@ int main(int argc, char *argv[])
 			egrad.norm() << "\t" << output.norm() << std::endl;
 
 		Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
-		Eigen::RowVectorXcd o = (output.adjoint()*grads);
-		fisher -= (o.adjoint()*o).real();
+		if (centering)
+		{
+			Eigen::RowVectorXcd o = (output.adjoint()*grads);
+			fisher -= (o.adjoint()*o).real();
+		}
 		double lambda = std::max(100.0*std::pow(0.9, epoch), 1e-3);
 		fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
 
