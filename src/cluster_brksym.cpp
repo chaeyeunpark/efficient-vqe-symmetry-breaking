@@ -112,18 +112,20 @@ int main(int argc, char *argv[])
 		std::ifstream fin(argv[1]);
 		fin >> param_in;
 	}
-    const uint32_t N = param_in.at("N").get<uint32_t>();
-    const uint32_t depth = param_in.at("depth").get<uint32_t>();
+	const uint32_t N = param_in.at("N").get<uint32_t>();
+	const uint32_t depth = param_in.at("depth").get<uint32_t>();
 	const double sigma = param_in.at("sigma").get<double>();
-	const double learning_rate = param_in.value("learning_rate", 1.0e-2);
+	const bool centering = param_in.value("centering", true);
+	const double learning_rate = param_in.value("learning_rate", 2.0e-2);
 	const std::string ini_path = param_in.value("ini_path", "");
 
 	param_out["parameters"] = nlohmann::json({
 		{"N", N},
 		{"depth", depth},
 		{"sigma", sigma},
+		{"centering", centering},
 		{"learning_rate", learning_rate},
-		{"h", h}
+		{"ini_path", ini_path}
 	});
 
 
@@ -199,10 +201,12 @@ int main(int argc, char *argv[])
 		std::normal_distribution<double> ndist(0., sigma);
 		for(uint32_t idx = 0; idx < parameters.size(); idx += 4)
 		{
-			parameters[idx] = ndist(re);
+			parameters[idx+0] = ndist(re);
 			parameters[idx+1] = ndist(re);
-			parameters[idx+2] = 2*M_PI/depth + ndist(re);
-			parameters[idx+3] = 2*M_PI/depth + ndist(re);
+			parameters[idx+2] = ndist(re);
+			parameters[idx+3] = ndist(re);
+			//parameters[idx+2] = 2*M_PI/depth + ndist(re);
+			//parameters[idx+3] = 2*M_PI/depth + ndist(re);
 		}
 	}
 	else
@@ -217,65 +221,73 @@ int main(int argc, char *argv[])
 			parameters[idx] = v+ndist(re);
 		}
 	}
+
 	{
-		std::ofstream param_out("initial_param.dat");
+		std::ofstream initial_weight("initial_weight.dat");
 		for(auto& p: parameters)
 		{
-			param_out << p.value() << "\t";
+			initial_weight << p.value() << "\t";
 		}
+		initial_weight.close();
 	}
-
-    Eigen::VectorXcd ini = Eigen::VectorXcd::Ones(1 << N);
-    ini /= sqrt(1 << N);
 
     const auto ham = cluster_ham(N, h);
 
-	std::cout.precision(10);
-
+    Eigen::VectorXcd ini = Eigen::VectorXcd::Ones(1 << N);
+    ini /= sqrt(1 << N);
     circ.set_input(ini);
 
-    for(uint32_t epoch = 0; epoch < total_epochs; ++epoch)
-    {
-        circ.clear_evaluated();
-        Eigen::VectorXcd output = *circ.output();
-    	for(auto& p: parameters)
+	std::cout.precision(10);
+
+	for(uint32_t epoch = 0; epoch < total_epochs; ++epoch)
+	{
+		circ.clear_evaluated();
+		Eigen::VectorXcd output = *circ.output();
+		for(auto& p: parameters)
 		{
 			p.zero_grad();
 		}
 
-        circ.derivs();
+		circ.derivs();
 
-        Eigen::MatrixXcd grads(1 << N, parameters.size());
+		Eigen::MatrixXcd grads(1 << N, parameters.size());
 
-        for(uint32_t k = 0; k < parameters.size(); ++k)
-        {
-            grads.col(k) = *parameters[k].grad();
-        }
+		for(uint32_t k = 0; k < parameters.size(); ++k)
+		{
+			grads.col(k) = *parameters[k].grad();
+		}
+
+		Eigen::VectorXd egrad = (output.adjoint()*ham*grads).real();
+		double energy = real(cx_double(output.adjoint()*ham*output));
+
+		std::cout << epoch << "\t" << energy << "\t" << 
+			egrad.norm() << "\t" << output.norm() << std::endl;
 
 		Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
-		//double lambda = std::max(100.0*std::pow(0.9, epoch), 1e-3);
-		double lambda = 1e-3;
+		if (centering)
+		{
+			Eigen::RowVectorXcd o = (output.adjoint()*grads);
+			fisher -= (o.adjoint()*o).real();
+		}
+		double lambda = std::max(100.0*std::pow(0.9, epoch), 1e-3);
 		fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
 
-        Eigen::VectorXd egrad = (output.adjoint()*ham*grads).real();
-        double energy = real(cx_double(output.adjoint()*ham*output));
+		Eigen::LLT<Eigen::MatrixXd> llt_fisher(fisher);
+		Eigen::VectorXd opt_v = -learning_rate*llt_fisher.solve(egrad);
 
-        std::cout << energy << "\t" << egrad.norm() << "\t" << output.norm() << std::endl;
-
-		Eigen::VectorXd opt = -learning_rate*fisher.inverse()*egrad;
-
-        for(uint32_t k = 0; k < parameters.size(); ++k)
-        {
-            parameters[k] += opt(k);
-        }
-    }
+		for(uint32_t k = 0; k < parameters.size(); ++k)
+		{
+			parameters[k] += opt_v(k);
+		}
+	}
 
 	{
-		std::ofstream param_out("final_param.dat");
-		for(auto& p: parameters)
+		std::ofstream final_weight("final_weight.dat");
+		for(const auto& p: parameters)
 		{
-			param_out << p.value() << "\t";
+			final_weight << p.value() << "\t";
 		}
+		final_weight.close();
 	}
 
     return 0;
