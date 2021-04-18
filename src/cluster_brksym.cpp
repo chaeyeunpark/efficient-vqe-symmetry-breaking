@@ -201,7 +201,7 @@ int main(int argc, char *argv[])
 		std::normal_distribution<double> ndist(0., sigma);
 		for(uint32_t idx = 0; idx < parameters.size(); idx += 4)
 		{
-			parameters[idx] = ndist(re);
+			parameters[idx+0] = ndist(re);
 			parameters[idx+1] = ndist(re);
 			parameters[idx+2] = ndist(re);
 			parameters[idx+3] = ndist(re);
@@ -221,12 +221,14 @@ int main(int argc, char *argv[])
 			parameters[idx] = v+ndist(re);
 		}
 	}
+
 	{
-		std::ofstream param_out("initial_param.dat");
+		std::ofstream initial_weight("initial_weight.dat");
 		for(auto& p: parameters)
 		{
-			param_out << p.value() << "\t";
+			initial_weight << p.value() << "\t";
 		}
+		initial_weight.close();
 	}
 
     const auto ham = cluster_ham(N, h);
@@ -235,8 +237,8 @@ int main(int argc, char *argv[])
     ini /= sqrt(1 << N);
     circ.set_input(ini);
 
-
 	std::cout.precision(10);
+
 	for(uint32_t epoch = 0; epoch < total_epochs; ++epoch)
 	{
 		circ.clear_evaluated();
@@ -254,7 +256,6 @@ int main(int argc, char *argv[])
 		{
 			grads.col(k) = *parameters[k].grad();
 		}
-
 		Eigen::VectorXd egrad = (output.adjoint()*ham*grads).real();
 		double energy = real(cx_double(output.adjoint()*ham*output));
 
