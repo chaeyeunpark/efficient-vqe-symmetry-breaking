@@ -170,7 +170,6 @@ int main(int argc, char *argv[])
 	circ.set_input(ini);
 
 	std::cout.precision(10);
-
 	for(uint32_t epoch = 0; epoch < total_epochs; ++epoch)
 	{
 		circ.clear_evaluated();
