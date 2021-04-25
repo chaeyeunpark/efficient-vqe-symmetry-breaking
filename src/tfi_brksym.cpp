@@ -134,8 +134,8 @@ int main(int argc, char *argv[])
 		{
 			if (idx % 3 == 2)
 			{
-				parameters[idx] = 2*M_PI/depth + ndist(re);
-				//parameters[idx] = ndist(re);
+				//parameters[idx] = 2*M_PI/depth + ndist(re);
+				parameters[idx] = ndist(re);
 			}
 			else
 				parameters[idx] = ndist(re);

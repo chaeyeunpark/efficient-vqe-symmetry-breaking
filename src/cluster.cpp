@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
 {
     using namespace qunn;
     using std::sqrt;
-	const uint32_t total_epochs = 2000;
+	const uint32_t total_epochs = 1000;
 	const double h = 0.5;
 
 	nlohmann::json param_in;

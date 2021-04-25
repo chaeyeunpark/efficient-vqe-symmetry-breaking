@@ -42,8 +42,8 @@ target_link_libraries(tfi qunn)
 add_executable(tfi_brksym "src/tfi_brksym.cpp")
 target_link_libraries(tfi_brksym qunn)
 
-add_executable(ti_tfi_brksym_incdepth "src/ti_tfi_brksym_incdepth.cpp")
-target_link_libraries(ti_tfi_brksym_incdepth qunn)
+add_executable(tfi_brksym_incdepth "src/tfi_brksym_incdepth.cpp")
+target_link_libraries(tfi_brksym_incdepth qunn)
 
 add_executable(cluster "src/cluster.cpp")
 target_link_libraries(cluster qunn)
@@ -51,8 +51,11 @@ target_link_libraries(cluster qunn)
 add_executable(cluster_brksym "src/cluster_brksym.cpp")
 target_link_libraries(cluster_brksym qunn)
 
-add_executable(ti_cluster_stab "src/ti_cluster_stab.cpp")
-target_link_libraries(ti_cluster_stab qunn)
+add_executable(cluster_stab "src/cluster_stab.cpp")
+target_link_libraries(cluster_stab qunn)
+
+add_executable(cluster_open "src/cluster_open.cpp")
+target_link_libraries(cluster_open qunn)
 
 add_executable(ti_j1j2 "src/ti_j1j2.cpp")
 target_link_libraries(ti_j1j2 qunn)

@@ -67,6 +67,7 @@ Eigen::SparseMatrix<qunn::cx_double> x_even_op(uint32_t N)
 		term = term*single_pauli(N, k, pauli_x().cast<cx_double>());
 	return term;
 }
+
 Eigen::SparseMatrix<qunn::cx_double> x_odd_op(uint32_t N)
 {
 	using namespace qunn;
@@ -75,7 +76,6 @@ Eigen::SparseMatrix<qunn::cx_double> x_odd_op(uint32_t N)
 		term = term*single_pauli(N, k, pauli_x().cast<cx_double>());
 	return term;
 }
-
 
 Eigen::SparseMatrix<qunn::cx_double> z_even_op(uint32_t N)
 {
@@ -115,17 +115,15 @@ int main(int argc, char *argv[])
     const uint32_t N = param_in.at("N").get<uint32_t>();
     const uint32_t depth = param_in.at("depth").get<uint32_t>();
 	const double sigma = param_in.at("sigma").get<double>();
-	const double grad_clip = param_in.value("grad_clip", 1e+8);
-	const double alpha = param_in.value("alpha", 0.8);
-	const bool use_ngd = param_in.value("use_ngd", true);
+	const bool centering = param_in.value("centering", true);
+	const double learning_rate = param_in.value("learning_rate", 2.0e-2);
 
 	param_out["parameters"] = nlohmann::json({
 		{"N", N},
 		{"depth", depth},
 		{"sigma", sigma},
-		{"grad_clip", grad_clip},
-		{"alpha", alpha},
-		{"use_ngd", use_ngd},
+		{"centering", centering},
+		{"learning_rate", learning_rate},
 		{"h", h}
 	});
 
@@ -143,7 +141,7 @@ int main(int argc, char *argv[])
 
 	std::vector<std::map<uint32_t, Pauli>> ti_zxz;
 
-	for(uint32_t k = 0; k < N-2; ++k)
+	for(uint32_t k = 0; k < N; ++k)
 	{
 		std::map<uint32_t, Pauli> term;
 		term[k] = Pauli('Z');
@@ -153,39 +151,14 @@ int main(int argc, char *argv[])
 		ti_zxz.emplace_back(std::move(term));
 	}
 
-	Eigen::VectorXd z_even = Eigen::VectorXd::Zero(1u << N);
-	for(uint32_t n = 0; n < (1u << N); ++n)
-	{
-		int elt = 0;
-		for(uint32_t k = 0; k < N; k+=2)
-		{
-			elt += 1-2*((n >> k) & 1);
-		}
-		z_even(n) = elt;
-	}
-
-	Eigen::VectorXd z_odd = Eigen::VectorXd::Zero(1u << N);
-	for(uint32_t n = 0; n < (1u << N); ++n)
-	{
-		int elt = 0;
-		for(uint32_t k = 1; k < N; k+=2)
-		{
-			elt += 1-2*((n >> k) & 1);
-		}
-		z_odd(n) = elt;
-	}
-
 	auto zxz_ham = qunn::SumPauliString(N, ti_zxz);
 	auto x_all_ham = qunn::SumLocalHam(N, qunn::pauli_x().cast<cx_double>());
-	auto z_even_ham = qunn::DiagonalOperator(z_even);
-	auto z_odd_ham = qunn::DiagonalOperator(z_odd);
+
 
 	for(uint32_t p = 0; p < depth; ++p)
 	{
 		circ.add_op_right(std::make_unique<qunn::SumPauliStringHamEvol>(zxz_ham));
 		circ.add_op_right(std::make_unique<qunn::ProductHamEvol>(x_all_ham));
-		circ.add_op_right(std::make_unique<qunn::DiagonalHamEvol>(z_even_ham));
-		circ.add_op_right(std::make_unique<qunn::DiagonalHamEvol>(z_odd_ham));
 	}
 
 	param_out["circuit"] = circ.desc();
@@ -201,46 +174,25 @@ int main(int argc, char *argv[])
     {
         p = ndist(re);
     }
-
-	//parameters[3] += M_PI/2;
-
-	for(uint32_t idx = 0; idx < parameters.size(); idx += 4)
 	{
-		parameters[idx + 2] += 2*M_PI/depth;
-		parameters[idx + 3] += 2*M_PI/depth;
+		std::ofstream initial_weight("initial_weight.dat");
+		for(auto& p: parameters)
+		{
+			initial_weight << p.value() << "\t";
+		}
+		initial_weight.close();
 	}
 
     Eigen::VectorXcd ini = Eigen::VectorXcd::Ones(1 << N);
     ini /= sqrt(1 << N);
+    circ.set_input(ini);
 
     const auto ham = cluster_ham(N, h);
-	const auto x_even = x_even_op(N);
-	const auto x_odd = x_even_op(N);
 
 	std::cout.precision(10);
 
-    circ.set_input(ini);
-
-	auto optimizer = OptimizerFactory::getInstance().createOptimizer(
-			param_in["optimizer"]);
-
     for(uint32_t epoch = 0; epoch < total_epochs; ++epoch)
     {
-		/*
-		double alpha_1_t = 0.1*alpha_1;
-		double alpha_2_t = 0.1*alpha_2;
-
-		if(epoch > 800)
-		{
-			alpha_1_t += alpha_1*std::min(1.0, int((epoch-800)/200)*0.1);
-			alpha_2_t += alpha_2*std::min(1.0, int((epoch-800)/200)*0.1);
-		}
-		*/
-
-		double alpha_1_t = alpha;
-		double alpha_2_t = alpha;
-
-
         circ.clear_evaluated();
         Eigen::VectorXcd output = *circ.output();
     	for(auto& p: parameters)
@@ -259,48 +211,33 @@ int main(int argc, char *argv[])
 
 
         Eigen::VectorXd egrad = (output.adjoint()*ham*grads).real();
-        Eigen::VectorXd x_even_grad = (output.adjoint()*x_even*grads).real();
-        Eigen::VectorXd x_odd_grad = (output.adjoint()*x_odd*grads).real();
         double energy = real(cx_double(output.adjoint()*ham*output));
-		double x_even_expectation = real(cx_double(output.adjoint()*x_even*output));
-		double x_odd_expectation = real(cx_double(output.adjoint()*x_even*output));
 
-        std::cout << epoch << "\t" << energy << "\t" << x_even_expectation <<
-			"\t" << x_odd_expectation << "\t" << egrad.norm() << "\t" << output.norm() << std::endl;
+        std::cout << epoch << "\t" << energy << "\t" 
+			<< egrad.norm() << "\t" << output.norm() << std::endl;
 
-		Eigen::VectorXd total_grad = (egrad + alpha_1_t*x_even_grad + alpha_2_t*x_odd_grad);
-		
-		double grad_norm = total_grad.norm();
-		if(grad_norm > grad_clip)
+		Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
+		if (centering)
 		{
-			total_grad *= (grad_clip/grad_norm);
+			Eigen::RowVectorXcd o = (output.adjoint()*grads);
+			fisher -= (o.adjoint()*o).real();
 		}
-		Eigen::VectorXd v;
+		double lambda = std::max(100.0*std::pow(0.9, epoch), 1e-3);
+		fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
 
-		if(use_ngd)
-		{
-			Eigen::MatrixXd fisher = (grads.adjoint()*grads).real();
-			double lambda = 1e-3;
-			fisher += lambda*Eigen::MatrixXd::Identity(parameters.size(), parameters.size());
-
-			Eigen::LLT<Eigen::MatrixXd> llt_fisher(fisher);
-			v = llt_fisher.solve(total_grad);
-		}
-		else{
-			v = total_grad;
-		}
-		Eigen::VectorXd opt = optimizer->getUpdate(v);
+		Eigen::LLT<Eigen::MatrixXd> llt_fisher(fisher);
+		Eigen::VectorXd opt_v = -learning_rate*llt_fisher.solve(egrad);
 
         for(uint32_t k = 0; k < parameters.size(); ++k)
         {
-            parameters[k] += opt(k);
+            parameters[k] += opt_v(k);
         }
     }
 	{
-		std::ofstream weight_out("final_weight.dat");
+		std::ofstream final_weight("final_weight.dat");
 		for(auto& p: parameters)
 		{
-			weight_out << p.value() << "\t";
+			final_weight << p.value() << "\t";
 		}
 	}
 
