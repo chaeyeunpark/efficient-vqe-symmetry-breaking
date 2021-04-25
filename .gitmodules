@@ -1,0 +1,3 @@
+[submodule "Yavque"]
+	path = Yavque
+	url = https://github.com/chaeyeunpark/Yavque.git

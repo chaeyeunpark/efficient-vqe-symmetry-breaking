@@ -2,10 +2,12 @@ cmake_minimum_required(VERSION 3.9)
 
 project(VQE_TI)
 
+set(YAVQUE_SOURCE_DIR "Yavque")
 include_directories("${YAVQUE_SOURCE_DIR}/include")
 include_directories("${YAVQUE_SOURCE_DIR}/externals/nlohmann_json_cmake_fetchcontent/include/")
 include_directories("${YAVQUE_SOURCE_DIR}/externals") 
 include_directories("${YAVQUE_SOURCE_DIR}/externals/ExactDiagonalization/Include/")
+add_subdirectory("./Yavque")
 
 if(NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE Release)
@@ -54,11 +56,3 @@ target_link_libraries(cluster_brksym qunn)
 add_executable(cluster_stab "src/cluster_stab.cpp")
 target_link_libraries(cluster_stab qunn)
 
-add_executable(cluster_open "src/cluster_open.cpp")
-target_link_libraries(cluster_open qunn)
-
-add_executable(ti_j1j2 "src/ti_j1j2.cpp")
-target_link_libraries(ti_j1j2 qunn)
-
-add_executable(ti_txyz "src/ti_txyz.cpp")
-target_link_libraries(ti_txyz qunn)
